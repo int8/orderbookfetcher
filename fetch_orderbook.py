@@ -78,7 +78,17 @@ def the_job():
         )
 
         compressed_bytes = zlib.compress(bytes, 9)
-        output_filepath = os.path.join(ORDERBOOK_OUTPUT_DIR, str(timestamp))
+        current_date = time.strftime('%-Y-%m-%d', time.localtime())
+        date_dir = os.path.join(ORDERBOOK_OUTPUT_DIR, current_date)
+        if not os.path.exists(date_dir):
+            os.mkdir(date_dir)
+
+        output_filepath = os.path.join(
+            ORDERBOOK_OUTPUT_DIR,
+            date_dir,
+            str(timestamp)
+        )
+
         with open(output_filepath, "wb") as f:
             f.write(compressed_bytes)
     except:
