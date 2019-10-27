@@ -1,7 +1,7 @@
 ### Cryptocurrency order book fetcher  
 
 
-Simple script retrieving any cryptocurrency pair via bitstamp API
+Simple tool retrieving any cryptocurrency pair via bitstamp API
 
 
 #### how to use 
