@@ -1,0 +1,13 @@
+version: '3'
+services:
+    orderbookfetcher:
+        build: .
+        restart: "always"
+        environment:
+          EXCEPTIONLESS_API_KEY: ${EXCEPTIONLESS_API_KEY}
+          EXCEPTIONLESS_PROJECT_ID: ${EXCEPTIONLESS_PROJECT_ID}
+          ORDERBOOK_OUTPUT_DIR_HOST: ${ORDERBOOK_OUTPUT_DIR_HOST}
+          API_CALL_FREQUENCY_SECONDS: ${API_CALL_FREQUENCY_SECONDS}
+        volumes:
+          - "${ORDERBOOK_OUTPUT_DIR_HOST}:/app/data"
+        command: "python3 /app/fetch_orderbook.py"
