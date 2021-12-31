@@ -385,11 +385,11 @@ class OrderBooksDataSequenceBase(ABC):
         for i, o in enumerate(self.order_books):
             if (i + 3) < len(self.order_books):
                 bids_same += self.order_books[i].bids == self.order_books[
-                    i + 1].bids
+                    i + 3].bids
                 asks_same += self.order_books[i].asks == self.order_books[
-                    i + 1].asks
+                    i + 3].asks
 
-        return (bids_same + asks_same) / len(self.order_books) <= (
+        return ((bids_same + asks_same) / len(self.order_books)) <= (
                 max_percentage / 100.)
 
     @property

@@ -44,6 +44,7 @@ def run_single_chunk(order_book_chunk: OrderBooksChunk):
     chunks = order_book_chunk.chunks(chunk_size=5000)
     for chunk in chunks:
         order_books = source.get_all_order_books(chunk.keys)
+
         dataset = OrderBooksDataSequenceDatasetV1(
             order_books, amount_best_bins=AMOUNT_BEST_BINS,
             amount_indices=AMOUNT_INDICES,
@@ -57,8 +58,8 @@ def run_single_chunk(order_book_chunk: OrderBooksChunk):
             dataset.save(file_name)
             print(f"{file_name} saved")
         else:
-            print("Dataset is not valid")
+            print(f"Dataset {dataset.metadata()} is not valid")
 
 
-with Pool(processes=8) as pool:
+with Pool(processes=32) as pool:
     results = pool.map(run_single_chunk, all_chunks)
