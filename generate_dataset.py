@@ -1,11 +1,10 @@
 from multiprocessing import Pool
 
 import boto3
-import datetime
 
 from dateutil.parser import parse
 
-from src.model import OrderBookChunksCollection, OrderBook, \
+from src.model import OrderBookChunksCollection, \
     S3OrderBookDataSource, OrderBooksDataSequenceDatasetV1, OrderBooksChunk
 import pickle
 
@@ -20,13 +19,11 @@ import sys
 start_date, end_date = sys.argv[1:]
 
 order_book_col = OrderBookChunksCollection(bucket_name="btc-order-book")
-# all_keys = order_book_col.get_all_keys(
-#     start_date=parse(start_date),
-#     end_date=parse(end_date)
-# )
+all_keys = order_book_col.get_all_keys(
+    start_date=parse(start_date),
+    end_date=parse(end_date)
+)
 
-with open("all_keys.pkl", "rb") as f:
-    all_keys = pickle.load(f)
 all_chunks = OrderBookChunksCollection.get_chunks(keys=all_keys,
                                                   min_number_of_elements=20000)
 
