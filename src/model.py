@@ -10,6 +10,7 @@ import zlib
 from abc import abstractmethod, ABC
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
+from hashlib import md5
 from multiprocessing import Pool
 
 from typing import List, Dict
@@ -384,10 +385,10 @@ class OrderBooksDataSequenceBase(ABC):
         asks_same = 0
         for i, o in enumerate(self.order_books):
             if (i + 3) < len(self.order_books):
-                bids_same += self.order_books[i].bids == self.order_books[
-                    i + 3].bids
-                asks_same += self.order_books[i].asks == self.order_books[
-                    i + 3].asks
+                bids_same += (self.order_books[i].bids == self.order_books[
+                    i + 3].bids)
+                asks_same += (self.order_books[i].asks == self.order_books[
+                    i + 3].asks)
 
         return ((bids_same + asks_same) / len(self.order_books)) <= (
                 max_percentage / 100.)
@@ -484,9 +485,16 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
         ])
 
     def save(self, filepath):
-        if os.path.isdir(self.TMP_DATA_DIR):
-            shutil.rmtree(self.TMP_DATA_DIR)
-        os.makedirs(self.TMP_DATA_DIR, exist_ok=True)
+
+        unique_tmp_path = os.path.join(self.TMP_DATA_DIR,
+                                       md5(filepath).hexdigest())
+        if os.path.isdir(unique_tmp_path):
+            shutil.rmtree(unique_tmp_path)
+
+        os.makedirs(
+            os.path.join(unique_tmp_path),
+            exist_ok=True
+        )
 
         x = self.x()
         y = self.y()
@@ -494,22 +502,22 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
         for idx, elem in enumerate(x):
             scipy.sparse.save_npz(
                 matrix=elem['bids_sparse'],
-                file=os.path.join(self.TMP_DATA_DIR, f"{idx}-bids-sparse"),
+                file=os.path.join(unique_tmp_path, f"{idx}-bids-sparse"),
             )
             scipy.sparse.save_npz(
                 matrix=elem['asks_sparse'],
-                file=os.path.join(self.TMP_DATA_DIR, f"{idx}-asks-sparse"),
+                file=os.path.join(unique_tmp_path, f"{idx}-asks-sparse"),
             )
         np.savez_compressed(
-            file=os.path.join(self.TMP_DATA_DIR, "y"),
+            file=os.path.join(unique_tmp_path, "y"),
             y=y,
         )
         np.save(
-            file=os.path.join(self.TMP_DATA_DIR, "idx"),
+            file=os.path.join(unique_tmp_path, "idx"),
             arr=np.array([o.s3_key for o in self.order_books]),
         )
 
-        with open(os.path.join(self.TMP_DATA_DIR, "metadata.json"), "w") as fp:
+        with open(os.path.join(unique_tmp_path, "metadata.json"), "w") as fp:
             json.dump(
                 obj=self.metadata(),
                 fp=fp
@@ -517,11 +525,11 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
 
         with tarfile.open(filepath, "w:gz") as tar:
             tar.add(
-                self.TMP_DATA_DIR,
-                arcname=os.path.basename(self.TMP_DATA_DIR)
+                unique_tmp_path,
+                arcname=os.path.basename(unique_tmp_path)
             )
 
-        shutil.rmtree(self.TMP_DATA_DIR)
+        shutil.rmtree(unique_tmp_path)
 
     @staticmethod
     def load(filepath):
