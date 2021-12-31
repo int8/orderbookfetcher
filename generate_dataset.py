@@ -19,11 +19,15 @@ import sys
 start_date, end_date = sys.argv[1:]
 
 order_book_col = OrderBookChunksCollection(bucket_name="btc-order-book")
+
+print("About to fetch all keys ")
 all_keys = order_book_col.get_all_keys(
     start_date=parse(start_date),
     end_date=parse(end_date)
 )
 
+print("Keys fetched")
+print("Chunking keys up")
 all_chunks = OrderBookChunksCollection.get_chunks(keys=all_keys,
                                                   min_number_of_elements=20000)
 
