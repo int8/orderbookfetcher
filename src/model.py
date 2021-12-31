@@ -487,7 +487,7 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
     def save(self, filepath):
 
         unique_tmp_path = os.path.join(self.TMP_DATA_DIR,
-                                       md5(filepath).hexdigest())
+                                       md5(filepath.encode()).hexdigest())
         if os.path.isdir(unique_tmp_path):
             shutil.rmtree(unique_tmp_path)
 
