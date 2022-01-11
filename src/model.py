@@ -13,7 +13,7 @@ from functools import reduce
 from hashlib import md5
 from multiprocessing import Pool
 
-from typing import List, Dict
+from typing import List
 
 import dataclasses
 
@@ -22,6 +22,7 @@ import msgpack
 import numpy as np
 import pandas as pd
 import scipy
+import ujson
 from dateutil.parser import parse
 from scipy import sparse
 
@@ -244,7 +245,7 @@ class OrderBook:
         asks = []
         amounts = []
         for ask_price, ask_amount in self.asks:
-            if ask_price / self.current_price - 1.0 <= acceptable_price_diff:
+            if (ask_price / self.current_price - 1.0) <= acceptable_price_diff:
                 asks.append(ask_price / self.current_price - 1.0)
                 amounts.append(ask_amount)
         asks_df = pd.DataFrame(
@@ -265,8 +266,8 @@ class OrderBook:
 
         for bid_price, bid_amount in self.bids:
 
-            if bid_price / self.current_price > (1 - acceptable_price_diff):
-                bids.append(bid_price / self.current_price)
+            if (1 - bid_price / self.current_price) <= acceptable_price_diff:
+                bids.append(1.0 - bid_price / self.current_price)
                 amounts.append(bid_amount)
 
         bids_df = pd.DataFrame(
@@ -297,7 +298,7 @@ class OrderBook:
         bids_df = self._get_bids_df()
 
         x_ind = pd.cut(bids_df.amounts_usd, amount_bins).values
-        y_ind = pd.cut(1 - bids_df.bids, price_diff_bins).values
+        y_ind = pd.cut(bids_df.bids, price_diff_bins).values
 
         m_bids = np.zeros((len(amount_bins), len(price_diff_indices)))
         for x, y in zip(x_ind, y_ind):
@@ -484,8 +485,130 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
             self._y_time_shifted_entries(n_seconds=3600),
         ])
 
-    def save(self, filepath):
+    @staticmethod
+    def sparse_to_list_of_tuples(sparse_matrix):
+        nz = sparse_matrix.nonzero()
+        m = sparse_matrix[nz]
+        return [
+            nz[0].tolist(),
+            nz[1].tolist(),
+            np.array(m.A[0], dtype=np.int32).tolist()
+        ]
 
+    def save(self, filepath):
+        unique_tmp_path = os.path.join(self.TMP_DATA_DIR,
+                                       md5(filepath.encode()).hexdigest())
+        if os.path.isdir(unique_tmp_path):
+            shutil.rmtree(unique_tmp_path)
+
+        os.makedirs(
+            os.path.join(unique_tmp_path),
+            exist_ok=True
+        )
+
+        x = self.x()
+        y = self.y()
+
+        x_sparse_bids = []
+        x_sparse_asks = []
+
+        for idx, elem in enumerate(x):
+            x_bids_current = self.sparse_to_list_of_tuples(
+                elem['bids_sparse']
+            )
+            x_asks_current = self.sparse_to_list_of_tuples(
+                elem['asks_sparse']
+            )
+
+            x_sparse_asks.append(x_asks_current)
+            x_sparse_bids.append(x_bids_current)
+
+        np.savez_compressed(
+            file=os.path.join(unique_tmp_path, "y"),
+            y=y,
+        )
+        np.save(
+            file=os.path.join(unique_tmp_path, "idx"),
+            arr=np.array([o.s3_key for o in self.order_books]),
+        )
+
+        with open(os.path.join(unique_tmp_path, "metadata.json"), "w") as fp:
+            json.dump(
+                obj=self.metadata(),
+                fp=fp
+            )
+
+        with open(os.path.join(unique_tmp_path, "x_sparse_asks.json"),
+                  "w") as fp:
+            ujson.dump(
+                x_sparse_asks,
+                fp
+            )
+
+        with open(os.path.join(unique_tmp_path, "x_sparse_bids.json"),
+                  "w") as fp:
+            ujson.dump(
+                x_sparse_bids,
+                fp
+            )
+
+        with tarfile.open(filepath, "w:gz") as tar:
+            tar.add(
+                unique_tmp_path,
+                arcname=os.path.basename(unique_tmp_path)
+            )
+
+        shutil.rmtree(unique_tmp_path)
+
+    @staticmethod
+    def load(filepath):
+        if os.path.isdir(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR):
+            shutil.rmtree(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR)
+        os.makedirs(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR, exist_ok=True)
+
+        with tarfile.open(filepath, "r:gz") as tar:
+            dir_name = [m.name for m in tar.getmembers() if m.isdir()][0]
+            tar.extractall(
+                path=OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR
+            )
+        unique_tmp_path = os.path.join(
+            OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR, dir_name
+        )
+        with np.load(
+                file=os.path.join(
+                    unique_tmp_path, "y.npz"
+                ), allow_pickle=True
+        ) as f:
+            y = f['y']
+
+        idx = np.load(
+            file=os.path.join(
+                unique_tmp_path,
+                "idx.npy"
+            ),
+            allow_pickle=True
+        )
+
+        with open(os.path.join(unique_tmp_path, "metadata.json"), "r") as fp:
+            metadata = json.load(
+                fp=fp
+            )
+
+        with open(os.path.join(unique_tmp_path, "x_sparse_asks.json"),
+                  "r") as fp:
+            x_sparse_asks = ujson.load(
+                fp
+            )
+
+        with open(os.path.join(unique_tmp_path, "x_sparse_bids.json"),
+                  "r") as fp:
+            x_sparse_bids = ujson.load(
+                fp
+            )
+        x = {'bids_sparse': x_sparse_bids, 'asks_sparse': x_sparse_asks}
+        return x, y, idx, metadata
+
+    def _legacy_save(self, filepath):
         unique_tmp_path = os.path.join(self.TMP_DATA_DIR,
                                        md5(filepath.encode()).hexdigest())
         if os.path.isdir(unique_tmp_path):
@@ -532,33 +655,35 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
         shutil.rmtree(unique_tmp_path)
 
     @staticmethod
-    def load(filepath):
+    def _legacy_load(filepath):
         if os.path.isdir(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR):
             shutil.rmtree(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR)
         os.makedirs(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR, exist_ok=True)
 
         with tarfile.open(filepath, "r:gz") as tar:
+            dir_name = [m.name for m in tar.getmembers() if m.isdir()][0]
             tar.extractall(
                 path=OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR
             )
-
+        unique_tmp_path = os.path.join(
+            OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR, dir_name
+        )
         with np.load(
                 file=os.path.join(
-                    OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR, "y.npz"
+                    unique_tmp_path, "y.npz"
                 ), allow_pickle=True
         ) as f:
             y = f['y']
 
         idx = np.load(
             file=os.path.join(
-                OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR,
+                unique_tmp_path,
                 "idx.npy"
             ),
             allow_pickle=True
         )
 
-        with open(os.path.join(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR,
-                               "metadata.json"), "r") as fp:
+        with open(os.path.join(unique_tmp_path, "metadata.json"), "r") as fp:
             metadata = json.load(
                 fp=fp
             )
@@ -566,13 +691,11 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
         x = []
         for index, _ in enumerate(idx):
             bids_sparse = scipy.sparse.load_npz(
-                file=os.path.join(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR,
-                                  f"{index}-bids-sparse.npz")
+                file=os.path.join(unique_tmp_path, f"{index}-bids-sparse.npz")
             )
 
             asks_sparse = scipy.sparse.load_npz(
-                file=os.path.join(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR,
-                                  f"{index}-asks-sparse.npz")
+                file=os.path.join(unique_tmp_path, f"{index}-asks-sparse.npz")
             )
 
             x.append({'bids_sparse': bids_sparse, 'asks_sparse': asks_sparse})
