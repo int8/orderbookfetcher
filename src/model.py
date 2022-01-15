@@ -371,8 +371,8 @@ class OrderBookChunksCollection:
         if len(chunk) > 0:
             chunks.append(chunk)
 
-        chunks = [chunk for chunk in chunks if
-                  len(chunk) > min_number_of_elements]
+        chunks = [c for c in chunks if
+                  len(c) > min_number_of_elements]
 
         return [OrderBooksChunk(c) for c in chunks]
 

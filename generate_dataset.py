@@ -8,11 +8,18 @@ from src.model import OrderBookChunksCollection, \
     S3OrderBookDataSource, OrderBooksDataSequenceDatasetV1, OrderBooksChunk
 import pickle
 
-PRICE_DIFF_BEST_BINS = pickle.load(open("data/price_diff_best_bins.bin", "rb"))
-AMOUNT_BEST_BINS = pickle.load(open("data/amount_usd_best_bins.bin", "rb"))
-AMOUNT_INDICES = dict(zip(AMOUNT_BEST_BINS, list(range(len(AMOUNT_BEST_BINS)))))
-PRICE_DIFF_INDICES = dict(
-    zip(PRICE_DIFF_BEST_BINS, list(range(len(PRICE_DIFF_BEST_BINS)))))
+PRICE_DIFF_BEST_BINS_256 = pickle.load(open("data/price_diff_best_bins_256_003_handcrafted_including_negative.bin", "rb"))
+AMOUNT_BEST_BINS_256 = pickle.load(open("data/amount_usd_best_bins_256_003.bin", "rb"))
+AMOUNT_INDICES_256 = dict(zip(AMOUNT_BEST_BINS_256, list(range(len(AMOUNT_BEST_BINS_256)))))
+PRICE_DIFF_INDICES_256 = dict(zip(PRICE_DIFF_BEST_BINS_256, list(range(len(PRICE_DIFF_BEST_BINS_256)))))
+
+
+
+PRICE_DIFF_BEST_BINS_64 = pickle.load(open("data/price_diff_best_bins_64_003_handcrafted_including_negative.bin", "rb"))
+AMOUNT_BEST_BINS_64 = pickle.load(open("data/amount_usd_best_bins_64_003.bin", "rb"))
+AMOUNT_INDICES_64 = dict(zip(AMOUNT_BEST_BINS_64, list(range(len(AMOUNT_BEST_BINS_64)))))
+PRICE_DIFF_INDICES_64 = dict(zip(PRICE_DIFF_BEST_BINS_64, list(range(len(PRICE_DIFF_BEST_BINS_64)))))
+
 
 import sys
 
@@ -29,7 +36,7 @@ all_keys = order_book_col.get_all_keys(
 print("Keys fetched")
 print("Chunking keys up")
 all_chunks = OrderBookChunksCollection.get_chunks(keys=all_keys,
-                                                  min_number_of_elements=20000)
+                                                  min_number_of_elements=10000)
 
 
 def run_single_chunk(order_book_chunk: OrderBooksChunk):
@@ -45,21 +52,33 @@ def run_single_chunk(order_book_chunk: OrderBooksChunk):
     for chunk in chunks:
         order_books = source.get_all_order_books(chunk.keys)
 
-        dataset = OrderBooksDataSequenceDatasetV1(
-            order_books, amount_best_bins=AMOUNT_BEST_BINS,
-            amount_indices=AMOUNT_INDICES,
-            price_diff_best_bins=PRICE_DIFF_BEST_BINS,
-            price_diff_indices=PRICE_DIFF_INDICES
+        dataset_64 = OrderBooksDataSequenceDatasetV1(
+            order_books, amount_best_bins=AMOUNT_BEST_BINS_64,
+            amount_indices=AMOUNT_INDICES_64,
+            price_diff_best_bins=PRICE_DIFF_BEST_BINS_64,
+            price_diff_indices=PRICE_DIFF_INDICES_64
         )
-        if dataset.validate():
-            meta_data = dataset.metadata()
+        if dataset_64.validate():
+            meta_data = dataset_64.metadata()
             file_name = f'{meta_data["start_day"]}-{meta_data["first_timestamp"]}' \
-                        f'-{meta_data["last_timestamp"]}.tar.gz'
-            dataset.save(file_name)
+                        f'-{meta_data["last_timestamp"]}_64.tar.gz'
+            dataset_64.save(file_name)
             print(f"{file_name} saved")
-        else:
-            print(f"Dataset {dataset.metadata()} is not valid")
+
+        dataset_256 = OrderBooksDataSequenceDatasetV1(
+            order_books, amount_best_bins=AMOUNT_BEST_BINS_256,
+            amount_indices=AMOUNT_INDICES_256,
+            price_diff_best_bins=PRICE_DIFF_BEST_BINS_256,
+            price_diff_indices=PRICE_DIFF_INDICES_256
+        )
+
+        if dataset_256.validate():
+            meta_data = dataset_256.metadata()
+            file_name = f'{meta_data["start_day"]}-{meta_data["first_timestamp"]}' \
+                        f'-{meta_data["last_timestamp"]}_256.tar.gz'
+            dataset_256.save(file_name)
+            print(f"{file_name} saved")
 
 
-with Pool(processes=32) as pool:
+with Pool(processes=8) as pool:
     results = pool.map(run_single_chunk, all_chunks)
