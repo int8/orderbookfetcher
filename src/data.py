@@ -6,7 +6,9 @@ from src.model import OrderBooksDataSequenceDatasetV1
 
 
 class OrderBooksDataset(Dataset):
-    def __init__(self, data_directory, epoch_size: int, files_to_merge: int = 10, time_length=100):
+    def __init__(self, data_directory, epoch_size: int,
+                 files_to_merge: int = 10, time_length=100,
+                 min_sequence_length_in_file=1000):
         self.files_to_merge = files_to_merge
         self.time_length = time_length
         self.data_directory = data_directory
@@ -16,6 +18,7 @@ class OrderBooksDataset(Dataset):
         self.loaded_data = []
 
         self.last_file_read = 0
+        self.min_sequence_length_in_file = min_sequence_length_in_file
 
     def load_to_memory(self):
         self.loaded_data = []
@@ -33,7 +36,7 @@ class OrderBooksDataset(Dataset):
             x, y, idx, metadata = OrderBooksDataSequenceDatasetV1.load(
                 os.path.join(self.data_directory, f)
             )
-            if len(idx) >= 1000:
+            if len(idx) >= self.min_sequence_length_in_file:
                 self.loaded_data.append((x, y, idx, metadata))
                 i += 1
                 if i >= self.files_to_merge:

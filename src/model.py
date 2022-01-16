@@ -397,7 +397,7 @@ class OrderBooksDataSequenceBase(ABC):
     @property
     def length(self):
         return len(self.order_books)
-
+ 
     def timestamps(self):
         return [o.timestamp for o in self.order_books]
 
