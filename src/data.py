@@ -2,6 +2,7 @@ import os
 from abc import abstractmethod, ABC
 
 import numpy as np
+import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import random
 
@@ -36,8 +37,9 @@ class OrderBooksSequenceDatasetBase(Dataset, ABC):
         for f in sorted_files:
             self.mark_as_read(f)
             x, y, idx, metadata = OrderBooksDataSequenceDatasetV1.load(
-                os.path.join(self.data_directory, f)
+                os.path.join(self.data_directory, f), remove_nans=True
             )
+
             if len(idx) >= self.min_sequence_length_in_file:
                 self.loaded_data.append((x, y, idx, metadata))
                 i += 1

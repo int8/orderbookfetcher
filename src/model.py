@@ -397,7 +397,7 @@ class OrderBooksDataSequenceBase(ABC):
     @property
     def length(self):
         return len(self.order_books)
- 
+
     def timestamps(self):
         return [o.timestamp for o in self.order_books]
 
@@ -561,7 +561,7 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
         shutil.rmtree(unique_tmp_path)
 
     @staticmethod
-    def load(filepath):
+    def load(filepath, remove_nans=False):
         if os.path.isdir(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR):
             shutil.rmtree(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR)
         os.makedirs(OrderBooksDataSequenceDatasetV1.TMP_DATA_DIR, exist_ok=True)
@@ -606,6 +606,13 @@ class OrderBooksDataSequenceDatasetV1(OrderBooksDataSequenceBase):
                 fp
             )
         x = {'bids_sparse': x_sparse_bids, 'asks_sparse': x_sparse_asks}
+
+        if remove_nans:
+            max_non_na_idx = np.argmax(pd.isna(y[6, :]))
+            idx = idx[:max_non_na_idx]
+            x['bids_sparse'] = x['bids_sparse'][:max_non_na_idx]
+            x['asks_sparse'] = x['asks_sparse'][:max_non_na_idx]
+            y = y[:, :max_non_na_idx]
         return x, y, idx, metadata
 
     def _legacy_save(self, filepath):
